@@ -1,0 +1,233 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../widgets/common_app_bar.dart';
+import '../utils/constants.dart';
+
+class ScanResultScreen extends StatelessWidget {
+  final String barcodeData;
+  final String format;
+  final String? imagePath;
+  final String? productName;
+  final Map<String, String>? customFields;
+  final String? customTitle;
+
+  const ScanResultScreen({
+    Key? key,
+    required this.barcodeData,
+    required this.format,
+    this.imagePath,
+    this.productName,
+    this.customFields,
+    this.customTitle,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final isUrl = _isValidUrl(barcodeData);
+    final hasCustomFields = customFields != null && customFields!.isNotEmpty;
+
+    return Scaffold(
+      appBar: CommonAppBar(
+        title: AppConstants.appName,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      body: Container(
+        color: Colors.grey.shade50,
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // QR/Barcode Data Card
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.withOpacity(0.1),
+                        blurRadius: 10,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        customTitle ?? 'Scanned Data',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      if (hasCustomFields)
+                        _buildCustomFields()
+                      else
+                        isUrl
+                            ? InkWell(
+                                onTap: () async {
+                                  final urlString = barcodeData.trim();
+                                  final url = urlString.startsWith('http://') || urlString.startsWith('https://')
+                                      ? Uri.parse(urlString)
+                                      : Uri.parse('https://$urlString');
+
+                                  try {
+                                    if (!await launchUrl(url, mode: LaunchMode.platformDefault)) {
+                                      _showSnackBar(context, 'Cannot open URL');
+                                    }
+                                  } catch (e) {
+                                    _showSnackBar(context, 'Error opening URL');
+                                  }
+                                },
+                                child: Text(
+                                  barcodeData,
+                                  style: const TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.blue,
+                                    decoration: TextDecoration.underline,
+                                    letterSpacing: 1,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              )
+                            : SelectableText(
+                                barcodeData,
+                                style: const TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 1,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                      const SizedBox(height: 16),
+                      Container(
+                        height: 2,
+                        width: 100,
+                        color: Colors.grey.shade300,
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.access_time,
+                            size: 16,
+                            color: Colors.grey.shade600,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            _getCurrentDateTime(),
+                            style: TextStyle(
+                              color: Colors.grey.shade600,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 30),
+
+                // Copy Button Only
+                ElevatedButton.icon(
+                  onPressed: () => _copyToClipboard(context),
+                  icon: const Icon(Icons.copy, size: 20),
+                  label: const Text(
+                    'Copy to Clipboard',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                    elevation: 2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCustomFields() {
+    final fields = customFields ?? {};
+    return Column(
+      children: fields.entries
+          .map(
+            (entry) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Column(
+                children: [
+                  Text(
+                    entry.key,
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    entry.value,
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  String _getCurrentDateTime() {
+    final now = DateTime.now();
+    return '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+  }
+
+  void _copyToClipboard(BuildContext context) {
+    Clipboard.setData(ClipboardData(text: barcodeData));
+    _showSnackBar(context, 'Copied: $barcodeData');
+  }
+
+  void _showSnackBar(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 1),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+      ),
+    );
+  }
+
+  // Validate URL
+  bool _isValidUrl(String text) {
+    final uri = Uri.tryParse(text);
+    return uri != null &&
+        (uri.hasScheme && (uri.scheme == 'http' || uri.scheme == 'https') ||
+            (!uri.hasScheme && text.contains('.'))); // also allow "www.example.com"
+  }
+
+  // Ensure URL has scheme
+  Uri _prepareUrl(String text) {
+    if (!text.startsWith('http://') && !text.startsWith('https://')) {
+      return Uri.parse('https://$text');
+    }
+    return Uri.parse(text);
+  }
+}
